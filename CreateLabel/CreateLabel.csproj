@@ -19,7 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RenderLabelResponse\RenderLabelResponse.csproj" />
+    <ProjectReference Include="..\RenderLabelResponse\RenderExpressConnectResponse.csproj" />
     <ProjectReference Include="..\SendLabelRequest\SendExpressConnectRequest.csproj" />
   </ItemGroup>
 

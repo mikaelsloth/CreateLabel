@@ -1,6 +1,6 @@
 ﻿namespace CreateLabel
 {
-    using RenderLabelResponse;
+    using RenderExpressConnectResponse;
     using SendLabelRequest;
     using System;
     using System.Diagnostics;
@@ -174,10 +174,26 @@
 
         private async void CreatePdf(object sender, EventArgs e)
         {
+            if (CompiledStylesheet == null)
+            {
+                _ = MessageBox.Show($"To create a PDF document containing the label, you must provide a stylesheet designed for the purpose. \r\nPlease input the needed information and try again.");
+                return;
+            }
+
             try
             {
                 string response = string.Empty;
                 string result = string.Empty;
+
+                //TODO Update design to support xslt params by user input 
+                //TODO Update design to support user input
+                PdfRenderer pdf = new ExpressLabelPdfRenderer(CompiledStylesheet, null, ValidateSchema ? SchemaSet : null)
+                {
+                    SavePdfFileName = $@"{ NamePrefix}{ GenerateName()}{ PdfNameSuffix}",
+                    SavePdfPath = OutputPath,
+                    FopPath = FopDirectory
+                }; 
+
                 switch (InputMode)
                 {
                     case InputModeEnum.Request:
@@ -187,23 +203,13 @@
                         XDocument answer = await request.SubmitRequestAsync(textBox1.Text);
                         if (request.IsErrorResponse(answer))
                             throw new Exception($"The web service returned an error response. \r\n{answer}");
-                        result = !string.IsNullOrWhiteSpace(OutputPath)
-                            ? ValidateSchema && SchemaSet != null
-                                ? Renderer.CreatePdf(answer, CompiledStylesheet, FopDirectory, OutputPath, SchemaSet)
-                                : Renderer.CreatePdf(answer, CompiledStylesheet, FopDirectory, OutputPath)
-                            : ValidateSchema && SchemaSet != null
-                                ? Renderer.CreatePdf(answer, CompiledStylesheet, FopDirectory, SchemaSet)
-                                : Renderer.CreatePdf(answer, CompiledStylesheet, FopDirectory);
+
+                        result = await pdf.CreatePdf(answer, null, ValidateSchema, !string.IsNullOrWhiteSpace(OutputPath));
                         break;
                     case InputModeEnum.Response:
                         response = textBox1.Text;
-                        result = !string.IsNullOrWhiteSpace(OutputPath)
-                           ? ValidateSchema && SchemaSet != null
-                               ? Renderer.CreatePdf(response, CompiledStylesheet, FopDirectory, OutputPath, SchemaSet)
-                               : Renderer.CreatePdf(response, CompiledStylesheet, FopDirectory, OutputPath)
-                           : ValidateSchema && SchemaSet != null
-                               ? Renderer.CreatePdf(response, CompiledStylesheet, FopDirectory, SchemaSet)
-                               : Renderer.CreatePdf(response, CompiledStylesheet, FopDirectory);
+                        result = await pdf.CreatePdf(response, null, ValidateSchema, !string.IsNullOrWhiteSpace(OutputPath));
+
                         break;
                     default:
                         break;
@@ -215,7 +221,6 @@
                     byte[] bytes = Convert.FromBase64String(result);
                     File.WriteAllBytes(pdf_filename, bytes);
                     ShowPdfFileInReader(pdf_filename);
-                    //File.Delete(pdf_filename);
                 }
             }
             catch (Exception ex)

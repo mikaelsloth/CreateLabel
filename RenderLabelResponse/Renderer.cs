@@ -1,8 +1,10 @@
-﻿namespace RenderLabelResponse
+﻿namespace RenderExpressConnectResponse
 {
     using System;
-    using System.Diagnostics;
     using System.IO;
+    using System.Security;
+    using System.Threading;
+    using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
     using System.Xml.Schema;
@@ -10,202 +12,60 @@
 
 #nullable enable
 
-    public class Renderer
+    public abstract class Renderer
     {
-        private const string BARCODEURL = "https://express.tnt.com/barbecue/barcode?type=Code128C&height=140&width=2&data=";
-        private const string IMAGEURL = "https://express.tnt.com/expresswebservices-website/rendering/images";
+        private string savePath = "";
 
-        private const string NamePrefix = "label";
-        private const string FoNameSuffix = ".txt";
-        private const string PdfNameSuffix = ".pdf";
+        protected string NamePrefix { get; set; } = "";
 
-        public static string CreatePdf(string labelResponseAsText, XslCompiledTransform? foStylesheet, string fopFrameworkPath)
+        public XsltArgumentList XsltArguments { get; init; }
+
+        public XslCompiledTransform Stylesheet { get; init; }
+
+        public XmlSchemaSet? SchemaSet { get; init; }
+
+        public string SaveOutputPath
         {
-            try
+            get => savePath;
+            set
             {
-                return CreatePdfImpl(labelResponseAsText, foStylesheet, fopFrameworkPath);
-            }
-            catch
-            {
-                throw;
+                try
+                {
+
+                    if (value == "")
+                    {
+                        savePath = value;
+                        return;
+                    }
+
+                    IoExtensions.NormalizeDirectory(ref value);
+                    if (value.ValidateDirectory()) savePath = value;
+                }
+                catch
+                {
+                    throw;
+                }
             }
         }
 
-        public static string CreatePdf(string labelResponseAsText, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string saveOutputPath)
+        public string SaveOutputFileName { get; set; } = "";
+
+        protected virtual async Task<XDocument> Transform(XDocument xmlresponse, bool validateschema = true, bool saveoutput = true)
         {
-            try
-            {
-                // If no output folder is defined inform caller
-                ValidateOutputDirectory(saveOutputPath);
-                return CreatePdfImpl(labelResponseAsText, foStylesheet, fopFrameworkPath, saveOutputPath);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(string labelResponseAsText, XslCompiledTransform? foStylesheet, string fopFrameworkPath, XmlSchemaSet schemaSet)
-        {
-            try
-            {
-                return CreatePdfImpl(labelResponseAsText, foStylesheet, fopFrameworkPath, null, schemaSet);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(string labelResponseAsText, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string saveOutputPath, XmlSchemaSet schemaSet)
-        {
-            try
-            {
-                // If no output folder is defined inform caller
-                ValidateOutputDirectory(saveOutputPath);
-                return CreatePdfImpl(labelResponseAsText, foStylesheet, fopFrameworkPath, saveOutputPath, schemaSet);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(XDocument labelResponse, XslCompiledTransform? foStylesheet, string fopFrameworkPath)
-        {
-            try
-            {
-                return CreatePdfImpl(labelResponse, foStylesheet, fopFrameworkPath);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(XDocument labelResponse, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string saveOutputPath)
-        {
-            try
-            {
-                // If no output folder is defined inform caller
-                ValidateOutputDirectory(saveOutputPath);
-                return CreatePdfImpl(labelResponse, foStylesheet, fopFrameworkPath, saveOutputPath);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(XDocument labelResponse, XslCompiledTransform? foStylesheet, string fopFrameworkPath, XmlSchemaSet schemaSet)
-        {
-            try
-            {
-                return CreatePdfImpl(labelResponse, foStylesheet, fopFrameworkPath, null, schemaSet);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public static string CreatePdf(XDocument labelResponse, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string saveOutputPath, XmlSchemaSet schemaSet)
-        {
-            try
-            {
-                // If no output folder is defined inform caller
-                ValidateOutputDirectory(saveOutputPath);
-                return CreatePdfImpl(labelResponse, foStylesheet, fopFrameworkPath, saveOutputPath, schemaSet);
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        private static string CreatePdfImpl(string labelResponseAsText, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string? saveOutputPath = null, XmlSchemaSet? schemaSet = null)
-        {
-            // If no input then inform caller
-            if (string.IsNullOrWhiteSpace(labelResponseAsText))
-                throw new ArgumentException("The label response text to render is missing. \r\nPlease input the label response to render.", nameof(labelResponseAsText));
-
-            // If not valid XML then inform caller
-            XDocument inputxml;
-            try
-            {
-                inputxml = XDocument.Parse(labelResponseAsText, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"The label response text to render is invalid. \r\nThe error returned was : \r\n{ex.Message}\r\nPlease correct the errors and try again.", nameof(labelResponseAsText), ex);
-            }
-
-            return CreatePdfImpl(inputxml, foStylesheet, fopFrameworkPath, saveOutputPath, schemaSet);
-        }
-
-        private static string CreatePdfImpl(XDocument labelResponse, XslCompiledTransform? foStylesheet, string fopFrameworkPath, string? saveOutputPath = null, XmlSchemaSet? schemaSet = null)
-        {
-            // If no stylesheet is defined inform caller
-            if (foStylesheet == null)
-                throw new ArgumentNullException(nameof(foStylesheet), "The FO stylesheet information is missing. \r\nPlease correct this before proceeding.");
-
-            // If the FOP framework is not installed inform user
-            if (string.IsNullOrWhiteSpace(fopFrameworkPath))
-                throw new ArgumentException("The FOP Framework information is missing. \r\nPlease correct this before proceeding.", nameof(fopFrameworkPath));
-
-            if (!Directory.Exists(fopFrameworkPath))
-                throw new ArgumentException("The FOP Framework directory does not exist or cannot be accessed. \r\nPlease select an existing directory before proceeding.", nameof(fopFrameworkPath));
-
-            // Check if this is error response as this otherwise generates errors in FOP framework
-            int errorcount = 0;
-            foreach (var item in labelResponse.Descendants("brokenRules"))
-            {
-                errorcount++;
-                break;
-            }
-
-            foreach (var item in labelResponse.Descendants("fault"))
-            {
-                errorcount++;
-                break;
-            }
-
-            if (errorcount > 0)
-                throw new ArgumentException($"\r\nResponse seems to be an error response, which cannot be rendered:\r\n{labelResponse}", nameof(labelResponse));
-
             // If schema not valid inform user
-            if (schemaSet != null && TryValidateSchema(labelResponse, schemaSet, out string message))
-                throw new ArgumentException($"The label response text to render is not confirming to the ExpressLabel schema. \r\nThe error returned was : \r\n{message}\r\nPlease ensure you provide a valid ExpressLabel response.");
+            if (SchemaSet != null && validateschema && TryValidateSchema(xmlresponse, SchemaSet, out string message))
+                throw new ArgumentException($"The response document to render does not confirm to the selected schema. \r\nThe error returned was : \r\n{message}\r\nPlease ensure you provide a valid response document, or the correct schema to validate against.");
 
-            // -------------------------------
             try
             {
-                // Start Rendering by creating the label.fo
-                XDocument transform = TransformInputXml(labelResponse, foStylesheet);
-
-                // Now save the label.fo to file
-                string tempPath = Path.GetTempPath();
-                string uniquename = GenerateName();
-                string fo_filename = NamePrefix + uniquename + FoNameSuffix;
-                SaveFoFile(transform, @$"{tempPath}{fo_filename}");
-
-                // The great moment: call the FOP environment to create a PDF file
-                string pdf_filename = NamePrefix + uniquename + PdfNameSuffix;
-                CreatePdfFile(fopFrameworkPath, tempPath, fo_filename, pdf_filename);
-
-                // Get the Base64 copy of the PDF
-                byte[] bytes = File.ReadAllBytes(@$"{tempPath}{pdf_filename}");
-                string pdf = Convert.ToBase64String(bytes);
+                // Start Rendering by creating the transformation
+                XDocument transform = TransformInputXml(xmlresponse, Stylesheet, XsltArguments);
 
                 // Copy the file if specified to save a copy
-                if (!string.IsNullOrEmpty(saveOutputPath))
-                    File.Copy(@$"{tempPath}{pdf_filename}", @$"{saveOutputPath}\{pdf_filename}");
+                if (saveoutput && !string.IsNullOrEmpty(SaveOutputPath) && !string.IsNullOrEmpty(SaveOutputFileName))
+                    await SaveOutputToFile(transform, @$"{SaveOutputPath}{SaveOutputFileName}");
 
-                // Finally, let's clean up
-                File.Delete(@$"{tempPath}{fo_filename}");
-                File.Delete(@$"{tempPath}{pdf_filename}");
-
-                return pdf;
+                return transform;
             }
             catch (Exception ex)
             {
@@ -213,31 +73,45 @@
             }
         }
 
-        private static void CreatePdfFile(string fop_directory, string outputPath, string fo_filename, string pdf_filename)
+        protected virtual async Task<XDocument> Transform(string responseasstring, bool validateschema = true, bool saveoutput = true)
         {
-            Process process = new();
-            ProcessStartInfo startInfo = new();
-            startInfo.WindowStyle = ProcessWindowStyle.Normal;
-            startInfo.FileName = $"{fop_directory}fop.bat";
-            startInfo.Arguments = @$"-c ""{fop_directory}conf\fop.xconf"" -fo ""{outputPath}{fo_filename}"" -pdf ""{outputPath}{pdf_filename}""";
-            startInfo.WorkingDirectory = fop_directory;
-            startInfo.CreateNoWindow = true;
-            process.StartInfo = startInfo;
-            _ = process.Start();
-            process.WaitForExit();
+            // If no input then inform caller
+            if (string.IsNullOrWhiteSpace(responseasstring))
+                throw new ArgumentException("The response text to render is missing. \r\nPlease input the label response to render.", nameof(responseasstring));
+
+            // If not valid XML then inform caller
+            XDocument inputxml;
+            try
+            {
+                inputxml = XDocument.Parse(responseasstring, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException($"The label response text to render is invalid. \r\nThe error returned was : \r\n{ex.Message}\r\nPlease correct the errors and try again.", nameof(responseasstring), ex);
+            }
+
+            return await Transform(inputxml, validateschema, saveoutput);
         }
 
-        private static string GenerateName() => DateTime.Now.Ticks.ToString();
-
-        private static void SaveFoFile(XDocument transform, string filename) => transform.Save(filename);
-
-        private static XDocument TransformInputXml(XDocument inputxml, XslCompiledTransform stylesheet)
+        protected Renderer(XslCompiledTransform stylesheet, XsltArgumentList? xsltarguments, XmlSchemaSet? schemaset)
         {
-            XDocument? newDocument = new();
+            Stylesheet = stylesheet;
+            XsltArguments = xsltarguments ?? (new());
+            SchemaSet = schemaset;            
+        }
 
-            XsltArgumentList args = new();
-            args.AddParam("barcode_url", "", BARCODEURL);
-            args.AddParam("images_dir", "", IMAGEURL);
+        protected static string GenerateFileName() => DateTime.Now.Ticks.ToString();
+
+        private async static Task SaveOutputToFile(XDocument transform, string filename)
+        {
+            await using FileStream fileStream = File.Open(filename, FileMode.Create);
+            await transform.SaveAsync(fileStream, SaveOptions.None, CancellationToken.None);
+        }
+
+        private static XDocument TransformInputXml(XDocument inputxml, XslCompiledTransform stylesheet, XsltArgumentList? args)
+        {
+            XDocument newDocument = new();
+
             try
             {
                 using XmlReader oldDocumentReader = inputxml.CreateReader();
@@ -255,14 +129,14 @@
         private static bool TryValidateSchema(XDocument inputxml, XmlSchemaSet schemas, out string message)
         {
             bool errors = false;
-            string tempmsg = string.Empty;
+            string tempmsg = "The following messages came from validating against the schema: \r\n";
+
             inputxml.Validate(schemas, (o, e) =>
             {
-                tempmsg = "The following messages came from validating against the schema: \r\n";
                 switch (e.Severity)
                 {
                     case XmlSeverityType.Error:
-                        tempmsg += $"\r\nERROR {e.Message}";
+                        tempmsg += $"\r\nERROR {e.Message ?? ""}";
                         errors = true;
                         break;
                     case XmlSeverityType.Warning:
@@ -273,15 +147,6 @@
 
             message = tempmsg;
             return errors;
-        }
-
-        private static void ValidateOutputDirectory(string saveOutputPath)
-        {
-            if (string.IsNullOrWhiteSpace(saveOutputPath))
-                throw new ArgumentException("The output directory is missing. \r\nPlease select this before proceeding.", nameof(saveOutputPath));
-
-            if (!Directory.Exists(saveOutputPath))
-                throw new ArgumentException("The output directory does not exist or cannot be accessed. \r\nPlease select an existing directory before proceeding.", nameof(saveOutputPath));
         }
     }
 }

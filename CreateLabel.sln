@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.31702.278
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CreateLabel", "CreateLabel\CreateLabel.csproj", "{344DA37C-8483-41AC-99FB-F9828D271ADB}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RenderLabelResponse", "RenderLabelResponse\RenderLabelResponse.csproj", "{5BA057F8-CD43-468E-8916-96238D0E5491}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RenderExpressConnectResponse", "RenderLabelResponse\RenderExpressConnectResponse.csproj", "{5BA057F8-CD43-468E-8916-96238D0E5491}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SendExpressConnectRequest", "SendLabelRequest\SendExpressConnectRequest.csproj", "{9CFAE377-C3D1-4371-AA3C-BB28FE453FC9}"
 EndProject
