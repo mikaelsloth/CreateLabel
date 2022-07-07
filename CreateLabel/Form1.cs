@@ -194,7 +194,7 @@
                     FopPath = FopDirectory
                 }; 
 
-            switch (InputMode)
+                switch (InputMode)
                 {
                     case InputModeEnum.Request:
                         ExpressLabelRequest request = new();
@@ -203,11 +203,13 @@
                         XDocument answer = await request.SubmitRequestAsync(textBox1.Text);
                         if (request.IsErrorResponse(answer))
                             throw new Exception($"The web service returned an error response. \r\n{answer}");
+
                         result = await pdf.CreatePdf(answer, null, ValidateSchema, !string.IsNullOrWhiteSpace(OutputPath));
                         break;
                     case InputModeEnum.Response:
                         response = textBox1.Text;
                         result = await pdf.CreatePdf(response, null, ValidateSchema, !string.IsNullOrWhiteSpace(OutputPath));
+
                         break;
                     default:
                         break;
